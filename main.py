@@ -22,6 +22,7 @@ class CreateBook(BaseModel):
     id: str = Field(default_factory=generate_id)
     title: str
     author: str
+    description: str
 
 # Load existing books from file (if any)
 def load_books():
@@ -64,3 +65,16 @@ def get_a_book(id: str):
             return book
         else:
             raise HTTPException(status_code=404, detail="book not found")
+            
+@app.delete(path="/books/{id}")
+def delete_a_book(id: str):
+    books = load_books()
+    found_a_book = False
+    for i, book in enumerate(books):
+        if book['id'] == id:
+            found_a_book = True
+            del books[i]
+            save_books(books)
+    if found_a_book == False:
+        raise HTTPException(status_code=404, detail="Book not found")
+        
