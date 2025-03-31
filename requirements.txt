@@ -1,2 +1,4 @@
 fastapi
 requests
+pymongo==4.11.3
+python-jose==3.4.0
