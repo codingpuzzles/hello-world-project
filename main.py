@@ -47,8 +47,8 @@ def create_book(book: CreateBook, user_details: dict = Depends(get_current_user)
     
 
 #API to get books
-@app.get("/books", response_model=List[BookView])
-def get_books():
+@app.get("/books", response_model=List[BookView], status_code=200)
+def get_books(user_details: dict = Depends(get_current_user)):
     try:
         mydb = db.connect()
         result = mydb.books.find({})
@@ -59,8 +59,8 @@ def get_books():
 
 
 #API to get
-@app.get("/books/{book_id}", response_model= BookView)
-def get_book_by_id(book_id: str):
+@app.get("/books/{book_id}", response_model= BookView, status_code=200)
+def get_book_by_id(book_id: str, user_details = Depends(get_current_user)):
     try:
         mydb = db.connect()
         result = mydb.books.find_one({ "_id": ObjectId(book_id)})
@@ -72,7 +72,7 @@ def get_book_by_id(book_id: str):
     
 
 @app.delete("/books/{book_id}")
-def delete_book(book_id: str):
+def delete_book(book_id: str, user_details = Depends(get_current_user)):
     
     mydb = db.connect()
     result = mydb.books.delete_one({"_id": ObjectId(book_id)})
