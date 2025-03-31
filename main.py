@@ -1,66 +1,88 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from typing import List
+from bson import ObjectId
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, validator
 import json
 import os
 import uuid
 
+from auth import get_current_user
+import db
+
 app = FastAPI()
 
-BOOKS_FILE = "books.json"
-
-def generate_id():
-    unique_id = uuid.uuid4()
-    return str(unique_id)
-
-class Book(BaseModel):
-    id: str 
-    title: str
-    author: str
 
 # Define the Book model
 class CreateBook(BaseModel):
-    id: str = Field(default_factory=generate_id)
     title: str
     author: str
-
-# Load existing books from file (if any)
-def load_books():
-    if os.path.exists(BOOKS_FILE):
-        with open(BOOKS_FILE, "r") as file:
-            try:
-                return json.load(file)
-            except json.JSONDecodeError:
-                return []
-    return []
+    description: str
 
 
-# Save books to file
-def save_books(books):
-    with open(BOOKS_FILE, "w") as file:
-        json.dump(books, file, indent=4)
+class BookView(CreateBook):
+    id: str = Field(..., alias = '_id')
+    @validator('id', pre=True)
+    def convert_objectid_to_str(cls, value):
+        if isinstance(value, ObjectId):
+            return str(value)
+        return value
+    
 
 
 # API to create a book
-@app.post("/books")
-def create_book(book: CreateBook):
-    books = load_books()
-    books.append(book.model_dump())
+@app.post("/books", response_model=BookView, status_code=201)
+def create_book(book: CreateBook, user_details: dict = Depends(get_current_user)):
+    try:
 
-    save_books(books)
-    return book
-
-
-# API to get all books
-@app.get("/books")
-def get_books():
-    books = load_books()
-    return books
-
-@app.get("/books/{id}")
-def get_a_book(id: str):
-    books = load_books()
-    for book in books:
-        if book['id'] == id:
-            return book
+        mydb = db.connect()
+        insert_result = mydb.books.insert_one(book.model_dump())
+        if insert_result.inserted_id:
+            result = mydb.books.find_one({ "_id" : insert_result.inserted_id})
+            return result
         else:
-            raise HTTPException(status_code=404, detail="book not found")
+            raise HTTPException(status_code = 422)
+    except Exception:
+        raise HTTPException(status_code=500, detail="something went wrong")
+    
+
+#API to get books
+@app.get("/books", response_model=List[BookView])
+def get_books():
+    try:
+        mydb = db.connect()
+        result = mydb.books.find({})
+        all_docs = list(result)
+        return all_docs
+    except Exception:
+        raise HTTPException(status_code=500, detail="something went wrong")
+
+
+#API to get
+@app.get("/books/{book_id}", response_model= BookView)
+def get_book_by_id(book_id: str):
+    try:
+        mydb = db.connect()
+        result = mydb.books.find_one({ "_id": ObjectId(book_id)})
+        if result is None:
+            raise HTTPException(status_code= 404)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code = 500 )
+    
+
+@app.delete("/books/{book_id}")
+def delete_book(book_id: str):
+    
+    mydb = db.connect()
+    result = mydb.books.delete_one({"_id": ObjectId(book_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code= 404)
+    return JSONResponse(None, status_code=204)
+    
+    
+
+
+
+
+
