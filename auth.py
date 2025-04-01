@@ -1,5 +1,5 @@
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordBearer, oauth2
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import requests
 from jose import JWTError, jwt
 
@@ -42,19 +42,16 @@ def decode_jwt(token: str):
             "e": public_key["e"]
         }
 
-        payload = jwt.decode(token, rsa_key, algorithms=["RS256"])
-        return payload
+        payload = jwt.decode(token, rsa_key, algorithms=["RS256"], audience=API_IDENTIFIER)
+        return payload, token
     except JWTError as e:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 # Dependency to get current user from the access token
-def get_current_user(request: Request):
-    templist = []
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        templist = auth_header.split()
-        return decode_jwt(templist[-1])
-    raise HTTPException(status_code=401)
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
+    token = credentials.credentials
+    return decode_jwt(token = token)
+
 
 ''''R
 '@app.get("/books")
