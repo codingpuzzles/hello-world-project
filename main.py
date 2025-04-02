@@ -61,14 +61,12 @@ def get_books(user_details: dict = Depends(get_current_user)):
 #API to get
 @app.get("/books/{book_id}", response_model= BookView, status_code=200)
 def get_book_by_id(book_id: str, user_details = Depends(get_current_user)):
-    try:
-        mydb = db.connect()
-        result = mydb.books.find_one({ "_id": ObjectId(book_id)})
-        if result is None:
-            raise HTTPException(status_code= 404)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code = 500 )
+    
+    mydb = db.connect()
+    result = mydb.books.find_one({ "_id": ObjectId(book_id)})
+    if result is None:
+        raise HTTPException(status_code= 404)
+    return result
     
 
 @app.delete("/books/{book_id}")
