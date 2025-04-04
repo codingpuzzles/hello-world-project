@@ -1,11 +1,14 @@
-from typing import List
+from io import BytesIO
+from typing import List, Optional
 from bson import ObjectId
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+import gridfs
 from pydantic import BaseModel, Field, validator
 import json
 import os
 import uuid
+import logging
 
 from auth import get_current_user
 import db
@@ -17,7 +20,8 @@ app = FastAPI()
 class CreateBook(BaseModel):
     title: str
     author: str
-    description: str
+    description: Optional[str] = None
+    gridfs_fileid : str
 
 
 class BookView(CreateBook):
@@ -32,17 +36,31 @@ class BookView(CreateBook):
 
 # API to create a book
 @app.post("/books", response_model=BookView, status_code=201)
-def create_book(book: CreateBook, user_details: dict = Depends(get_current_user)):
+async def create_book(book_name: str = Form(...), author: str = Form(...),
+                 description: Optional[str] = Form(None), 
+                  file: UploadFile = File(...), user_details: dict = Depends(get_current_user)):
     try:
 
         mydb = db.connect()
+        fs = gridfs.GridFS(mydb)
+        # Read the file content
+        file_content = await file.read()
+    
+        # Create a BytesIO object to simulate a file-like object
+        file_like = BytesIO(file_content)
+    
+        # Store the PDF in GridFS
+        file_id = fs.put(file_like, filename=file.filename, content_type="application/pdf")
+        book = CreateBook(title=book_name, author=author, description=description, gridfs_fileid=str(file_id))
+    
         insert_result = mydb.books.insert_one(book.model_dump())
         if insert_result.inserted_id:
             result = mydb.books.find_one({ "_id" : insert_result.inserted_id})
             return result
         else:
             raise HTTPException(status_code = 422)
-    except Exception:
+    except Exception as e:
+        logging.error(e)
         raise HTTPException(status_code=500, detail="something went wrong")
     
 
@@ -58,7 +76,7 @@ def get_books(user_details: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="something went wrong")
 
 
-#API to get
+#API to get book by id
 @app.get("/books/{book_id}", response_model= BookView, status_code=200)
 def get_book_by_id(book_id: str, user_details = Depends(get_current_user)):
     
@@ -68,6 +86,8 @@ def get_book_by_id(book_id: str, user_details = Depends(get_current_user)):
         raise HTTPException(status_code= 404)
     return result
     
+
+
 
 @app.delete("/books/{book_id}")
 def delete_book(book_id: str, user_details = Depends(get_current_user)):
